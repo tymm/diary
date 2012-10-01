@@ -1,0 +1,438 @@
+#!/bin/bash
+#
+#  diary
+#
+#  A simple program to keep track of daily events.  Editing is allowed only
+#  on the current day's page (unless you cheat).  
+# 
+#  Creates a directory, ".diary", in the users home directory.  Individual pages
+#  are stored in ".diary/pages"
+#
+#  Use "diary usage" to see examples of the command set.
+#
+#  Written by Jamie Briggs <jamie.briggs@computalog.com>
+#
+
+DIARYDIR="$HOME/.diary"
+PAGEDIR="$DIARYDIR/pages"
+
+#
+#  The following are can be overidden in the user's diaryrc file
+#
+
+#  Number of spaces per tab
+SPERTAB=3
+
+#  Save the current xterm label
+XTITLE=
+if [ "$TERM" == "xterm" ]; then
+   XPROPS=`xprop -id $WINDOWID 2>/dev/null`
+   if [ ! -z "$XPROPS" ]; then
+      XTITLE=$( echo "$XPROPS" | grep WM_NAME | cut -d= -f2\
+                                     | sed -e 's/"\(.*\)"/\1/g')
+   fi
+fi
+
+#  Respect the EDITOR environment variable, if it exists
+if [ "$EDITOR" = "" ]; then
+	EDITOR="/usr/bin/vim"
+	EDIT_OPTIONS="-c $ -c \"set tabstop=$SPERTAB\""
+fi
+
+# Less configuration variables
+BACKKEY=u
+FWDKEY=i
+
+# Allow user to overide options
+. $DIARYDIR/diaryrc &>/dev/null
+
+LESSKEY=$DIARYDIR/lesskey
+LESSOPTS=$DIARYDIR/.less_srch
+
+TODAY=`date +%Y.%m.%d`
+LATEST=`ls $PAGEDIR | sort -r | head -1`
+
+TODAY_TMP=$DIARYDIR/$TODAY.$$.tmp
+TODAY_ORG=$DIARYDIR/$TODAY.$$.org
+
+print_usage ()
+{
+   cat << ENDUSAGE
+
+Version:   0.1
+
+Examples:  diary  - Opens today's page for editing.  Paragraphs beginning
+                    with a matching set of brackets containing nothing but
+                    space will be carried forward to the next day.  Putting
+                    a non-space character between a bracket set will cause
+                    it to be left behind.
+
+           diary entry Hello World  - adds a line to today's diary.
+           diary cheat yesterday    - This is cheating! ... but you can edit
+                                      past entries if you really want to.
+
+           diary 10/15/99   - Opens october 15 entry for viewing.
+           diary 2 days ago - View the day before yesterday's entry.
+           diary review     - outputs entries for the last 8 calendar days.
+           diary review 3   - outputs entries for the last 3 calendar days.
+
+           diary list 5     - outputs the last 5 non-blank pages.
+           diary october    - outputs all of October's non-blank pages.
+
+           diary cat              - dumps today's page to stdout.
+           diary cat last monday  - dumps last Monday's page to stdout.
+
+           diary grep [Ff]ind     - greps pages for lines containing
+                                    find or Find.
+           diary search "^Fixed"  - opens pages for viewing that contain
+                                    lines that start with "Fixed".
+
+ENDUSAGE
+}
+
+label_xterm()
+{
+   if [ ! -z "$XTITLE" ]; then
+      echo -n "]0;$1"
+   fi
+}
+
+promote_text()
+{
+   awk -v fwd=$1 -- '/^ *\([^\(]*[^ ][^\(]*\)/ { carry = 0 }
+                     /^ *\{[^\{]*[^ ][^\{]*\}/ { carry = 0 }
+                     /^ *\[[^\[]*[^ ][^\[]*\]/ { carry = 0 }
+                     /^ *\( *\)/ { carry = 1 } 
+                     /^ *\{ *\}/ { carry = 1 } 
+                     /^ *\[ *\]/ { carry = 1 } 
+                     { if ( fwd ) { if (carry)   print $0 } 
+                       else       { if (! carry) print $0 }
+                     } 
+                     /^ *$/{ carry = 0 }'
+}
+
+make_today ()
+{
+   LAST=$1
+   chmod u+w $PAGEDIR
+
+   echo -n "                       " > $PAGEDIR/$TODAY  
+   date "+%A, %B %d, %Y" >> $PAGEDIR/$TODAY
+   echo >> $PAGEDIR/$TODAY
+
+   if [ "$LAST" != "" ]; then
+      LAST_TMP="$DIARYDIR/$LAST"
+      expand -$SPERTAB $PAGEDIR/$LAST | promote_text 1 >> $PAGEDIR/$TODAY
+      expand -$SPERTAB $PAGEDIR/$LAST | promote_text 0  > $LAST_TMP
+
+      mv -f $LAST_TMP $PAGEDIR/$LAST
+   fi
+
+   chmod -R a-w $PAGEDIR
+}
+
+edit_diary ()
+{
+   cp $PAGEDIR/$TODAY $TODAY_TMP
+   cp $PAGEDIR/$TODAY $TODAY_ORG
+   chmod u+w $TODAY_TMP $TODAY_ORG
+
+   label_xterm "Diary $TODAY"
+   eval $EDITOR $EDIT_OPTIONS $TODAY_TMP
+   label_xterm $XTITLE
+
+   chmod u+w $PAGEDIR $PAGEDIR/$TODAY
+   (diff3 -e $PAGEDIR/$TODAY $TODAY_ORG $TODAY_TMP ; echo 'wq') | ed -s $PAGEDIR/$TODAY
+   rm $TODAY_TMP $TODAY_ORG
+   chmod -R a-w $PAGEDIR
+}
+
+cheat_diary ()
+{
+   DATESTR=`date --date="$*" '+%Y.%m.%d'` || return 1
+   CHEAT=$DATESTR
+   CHEAT_TMP="$DIARYDIR/$DATESTR.$$.cheat"
+   CHEAT_ORG="$DIARYDIR/$DATESTR.$$.org"
+
+   if [ ! -f  $PAGEDIR/$CHEAT ]; then
+
+      chmod u+w $PAGEDIR
+
+      echo -n "                       " > $PAGEDIR/$CHEAT
+      date --date="$*" '+%A, %B %d, %Y' >> $PAGEDIR/$CHEAT
+      echo >> $PAGEDIR/$CHEAT
+
+      chmod -R a-w $PAGEDIR
+   fi
+
+   cp $PAGEDIR/$CHEAT $CHEAT_ORG
+   cp $PAGEDIR/$CHEAT $CHEAT_TMP
+   chmod u+w $CHEAT_TMP $CHEAT_ORG
+
+   label_xterm "Diary Cheat $CHEAT"
+   eval $EDITOR $EDIT_OPTIONS $CHEAT_TMP
+   label_xterm $XTITLE
+
+   chmod u+w $PAGEDIR $PAGEDIR/$CHEAT
+   (diff3 -e $PAGEDIR/$CHEAT $CHEAT_ORG $CHEAT_TMP ; echo 'wq') | ed -s $PAGEDIR/$CHEAT
+   rm $CHEAT_TMP $CHEAT_ORG
+   chmod -R a-w $PAGEDIR
+
+}
+
+review_page () 
+{
+   DATESTR=`date --date="$*" '+%A, %B %d, %Y'`
+
+   HEADER=`date --date="$DATESTR" '+%A, %m/%d/%y'`
+   PAGE="$PAGEDIR/`date --date="$DATESTR" +'%Y.%m.%d'`"
+   printf "===== %-19s ========================================\n" "$HEADER"
+   if [ -f $PAGE ]; then
+      expand -$SPERTAB $PAGE | grep -v "^ *$DATESTR *$" | promote_text 0
+      echo
+   else
+      echo 
+   fi
+}
+
+review_diary ()
+{
+   DAY=7
+   if [ -n "$1" ]; then
+      if [ $[$1] -le 0 ]; then
+         echo Invalid number of days: \"$1\"
+         return 1
+      fi
+      DAY=$[$1 - 1]
+   fi
+
+   echo
+
+   while [ $DAY -ge 0 ]; do
+      review_page `date --date="$DAY days ago"`
+      DAY=$[$DAY - 1]
+   done
+
+   echo
+}
+
+review_entered ()
+{
+   PAGES=1
+   if [ -n "$1" ]; then
+      PAGES=$[$1]
+      if [ $PAGES -le 0 ]; then
+         echo Invalid number of days: \"$1\"
+         return 1
+      fi
+   fi
+
+   builtin cd $PAGEDIR
+   for DATE in `ls $PAGEDIR | sort  | tail -$PAGES`; do 
+      review_page `echo $DATE | sed -e "s:\.:/:g"` 
+   done
+}
+
+review_month ()
+{
+   YEAR=`date +%Y`
+   THIS_MONTH=`date +%m`
+   TGT_MONTH=`date --date="$1 1" +%m`
+   if [ $TGT_MONTH -gt $THIS_MONTH ]; then
+      YEAR=$[$YEAR-1]
+   fi
+
+   builtin cd $PAGEDIR
+   ENTRIES=`ls $YEAR.$TGT_MONTH.?? 2>/dev/null`
+
+   if [ "$ENTRIES" = "" ]; then
+      echo
+      echo "No entries for $1, $YEAR"
+      echo
+   else
+      for DATE in `echo $ENTRIES | sort  | tail -$PAGES`; do 
+         review_page `echo $DATE | sed -e "s:\.:/:g"` 
+      done
+   fi
+}
+
+grep_diary ()
+{
+   ARGS=
+   ARG=`expr "$1" : '-.*'`
+   while [ $ARG -gt 0 ]; do
+      ARGS="$ARGS $1"
+      shift
+      ARG=`expr "$1" : '-.*'`
+   done
+
+   echo 
+   builtin cd $PAGEDIR
+   egrep $ARGS "$*" `ls $PAGEDIR | sort` 
+   echo
+}
+
+search_diary ()
+{
+   ARGS=
+   ARG=`expr "$1" : '-.*'`
+   while [ $ARG -gt 0 ]; do
+      ARGS="$ARGS $1"
+      shift
+      ARG=`expr "$1" : '-.*'`
+   done
+
+   if [ ! -f $LESSOPTS ] || [ $LESSOPTS -ot $0 ]; then
+      {
+         echo #command
+         echo $BACKKEY		next-file
+         echo $FWDKEY		prev-file
+      } > $LESSKEY
+      lesskey -o $LESSOPTS $LESSKEY
+      rm $LESSKEY
+   fi
+
+   builtin cd $PAGEDIR
+   label_xterm "Diary Search '$*'"
+   egrep $ARGS --files-with-matches "$*" `ls | sort -r` |
+      xargs less -P'"u" for older, "i" for newer ' -k$LESSOPTS +"/$*" ++g
+   label_xterm $XTITLE
+}
+
+add_entry ()
+{
+   LATEST_TMP="$DIARYDIR/$LATEST"
+
+   cp $PAGEDIR/$TODAY $TODAY_TMP
+   cp $PAGEDIR/$TODAY $TODAY_ORG
+   chmod u+w $TODAY_TMP $TODAY_ORG
+
+   DAT=`date +%H:%M`
+   echo $DAT $* >> $TODAY_TMP 
+
+   chmod u+w $PAGEDIR $PAGEDIR/$TODAY
+   (diff3 -e $PAGEDIR/$TODAY $TODAY_ORG $TODAY_TMP ; echo 'wq') | ed -s $PAGEDIR/$TODAY
+   rm $TODAY_TMP $TODAY_ORG
+   # mv -f $TODAY_TMP $PAGEDIR/$TODAY
+   chmod -R a-w $PAGEDIR
+}
+
+view_page ()
+{
+   DATESTR=`date --date="$*" '+%Y.%m.%d' 2>/dev/null`
+   if [ -n "$DATESTR" ]; then
+      if [ -f $PAGEDIR/$DATESTR ]; then
+         if [ "$DATESTR" = "$TODAY" ]; then
+            edit_diary || less -c +g $PAGEDIR/$DATESTR
+         else
+            label_xterm "Diary View $DATESTR"
+            less -c +g $PAGEDIR/$DATESTR
+            label_xterm $XTITLE
+         fi
+      else
+         DATESTR=`date --date="$*" '+%A, %B %d, %Y'`
+         echo "There is no entry for $DATESTR ($*)"
+      fi
+   else
+      return 1
+   fi
+
+   return 0
+}
+
+cat_page ()
+{
+   DATESTR=`date --date="$*" '+%Y.%m.%d'`
+   if [ -n "$DATESTR" ]; then
+      if [ -f $PAGEDIR/$DATESTR ]; then
+         cat $PAGEDIR/$DATESTR
+      else
+         DATESTR=`date --date="$*" '+%A, %B %d, %Y'`
+         echo "There is no entry for $DATESTR ($*)"
+      fi
+   else
+      return 1
+   fi
+
+   return 0
+}
+
+################################################################################
+# main 
+################################################################################
+
+#  Handle first time use
+[ -d $PAGEDIR ] || mkdir -p $PAGDIR
+
+if [ "$LATEST" != "$TODAY" ]; then
+   make_today $LATEST 
+fi
+
+if [ "$#" = "0" ]; then
+  edit_diary
+elif [ "$#" = "1" ]; then
+   PARAM=`echo $1 | tr A-Z a-z` 
+   case "$PARAM" in
+      cheat | edit )
+         edit_diary
+      ;;
+      review )
+         review_diary
+	   ;;
+      list )
+         review_entered
+	   ;;
+      search | grep )
+         echo "You need to specify search terms."
+      ;;
+      cat )
+         cat_page
+	   ;;
+      help | ? | usage | -h | --help | --usage )
+         print_usage
+      ;;
+      january | february | march | april | \
+      may | june | july | august | \
+      september | october | november | december )
+         review_month $PARAM
+      ;;
+      * )
+         view_page "$*" || echo "Invalid parameter $@"
+      ;;
+   esac
+else
+   case "$1" in
+      cheat )
+         shift
+         cheat_diary $@
+      ;;
+      review )
+         shift
+         review_diary $@
+	   ;;
+      list )
+         shift
+         review_entered $@
+	   ;;
+      search )
+         shift
+         search_diary $@      
+      ;;
+      grep )
+         shift
+         grep_diary $@      
+      ;;
+      cat )
+         shift
+         cat_page $@
+	   ;;
+      entry )
+         shift
+         add_entry $@
+	   ;;
+      * )
+         view_page "$*" || echo "Invalid parameter $@"
+      ;;
+   esac
+fi
+

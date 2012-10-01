@@ -1,0 +1,44 @@
+Diary 0.1
+==========
+
+Diary is a console-based diary and todo list that leverages the capabilities of
+the Unix toolbox, using date, grep, less and a host of others -- as well as
+your favorite text editor -- to produce a suprisingly capable tool.
+
+See diary(1) for a more complete description and a bunch of examples.
+
+
+Requirements:
+--------------
+diary is a shell script that uses a number of common programs.  These
+include:
+
+   bash, xprop, grep, egrep, cut, sed, cat, awk, chmod, date, expand, cp,
+   diff3, rm, sort, tail, ls, xargs, and less.
+
+Reasonably recent versions of these utilities (diary had been functional
+for approximately 2 years before being publicly released).
+
+
+Installation:
+--------------
+1.  system-wide:
+   - su to root
+   - Unzip and untar the tarball somewhere.
+   - Customize and run install.sh
+
+2.  local:
+   - Unzip and untar the tarball somewhere.
+   - copy 'diary' somewhere in your path and make it executable 
+     (chmod a+rx diary).
+
+
+Usage:
+-------
+See diary(1).
+
+
+Reporting bugs:
+----------------
+Please use the Sourceforge:  http://sourceforge.net/projects/diary/
+Or you can email me directly:  jamie.briggs@computalog.com

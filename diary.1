@@ -1,0 +1,141 @@
+.Dd February 18, 2000
+.Dt diary 1
+.Os Linux
+.Sh NAME
+.Nm diary
+.Nd a text-based diary and todo list.
+.Sh SYNOPSIS
+.Nm diary
+.Nm diary 
+<date string>
+.Nm diary 
+entry <text to insert into diary>
+.Nm diary 
+cheat <date string>
+.Nm diary 
+review [<number of days>]
+.Nm diary 
+list [<number of entries>]
+.Nm diary 
+<month name>
+.Nm diary 
+grep <search string>
+.Nm diary 
+search <search string>
+.Nm diary 
+cat [<date string>]
+.Sh DESCRIPTION
+.Ar Diary
+is a simple yet effective daily diary.  It allows daily entries to be stored,
+searched and reviewed in a variety of ways.  Diary content is manipulated with
+a text editor (the default is 
+.Ar vi
+) and stored in simple text "pages", one for each day.  In general only the
+current day's page is editable although there is a 
+.Ar cheat
+command that allows access to older pages.  
+.Pp
+Content can be carried over from one day to the next by starting a paragraph
+with a set of braces containing nothing except possibly white space (eg.
+{}, ( ), [])  All lines following the one starting with the
+empty brace pair and continuing to the first blank line are carried forward when
+.Ar diary
+starts a new day.  Suppose your diary for today contained the lines
+.Pp
+.Dl Wrote some basic documentation for the diary program.
+.br
+.Dl { } Write a better man page for diary!
+.Pp
+When you opened it tomorrow you would find that the first line had been
+left behind.  Running "diary yesterday" would confirm it.  The second line
+will appear in today's page and tomorrow's and so on until you either delete
+it or fill the braces --
+.Pp
+.Dl {x} Write a better man page for diary!
+.Pp
+which leaves a record of the todo entry on the day that it was completed.
+.Pp
+.Ar Diary
+owes much of its functionality to various standard shell utilities, 
+particularly 
+.Ar date
+(1) and
+.Ar grep
+(1).  Date specifications like "yesterday", "3 days ago" or "last week" work
+because they are interpreted directly by
+.Ar date
+(1).  Similarly any options supported by 
+.Ar grep
+(1) may be added to the 
+.Ar grep
+and
+.Ar search
+subcommands.
+.Pp
+Non-editable pages are opened with 
+.Ar less
+(1).  When a number of pages are returned by the 
+.Ar search
+subcommand they can be cycled through using the "u" and "i"
+keys.  Why? because they don't conflict with existing 
+.Ar less 
+(1) commands and
+are easier to reach then the standard file cycling keys.
+.Sh EXAMPLES
+The easiest way to see how
+.Ar diary
+works is through a series of examples.
+.Pp
+
+.Bl -tag -width Ds
+.It Cm diary
+Opens today's page for editing.  Paragraphs beginning
+with a matching set of brackets containing nothing but
+space will be carried forward to the next day.  Putting
+a non-space character between a bracket set will cause
+it to be left behind.
+
+.It Cm diary entry Hello World
+adds the line "Hello World" to today's diary page.
+.It Cm diary cheat yesterday
+This is cheating! ... but you can edit
+past entries if you really want to.
+
+.It Cm diary 10/15/99    
+Opens october 15, 1999 entry for viewing.
+.It Cm diary 2 days ago
+View the day before yesterday's entry.
+.It Cm diary review
+outputs entries for the last 8 calendar days.
+.It Cm diary review 3
+outputs entries for the last 3 calendar days.
+.It Cm diary list 5
+outputs the last 5 non-blank pages.
+.It Cm diary october
+outputs all of October's non-blank pages.
+.It Cm diary cat
+dumps today's page to stdout.
+.It Cm diary cat last monday
+dumps last Monday's page to stdout.
+.It Cm diary grep [Ff]ind
+greps pages for lines containing find or Find.
+.It Cm diary search "^Fixed"
+opens pages for viewing that contain lines that start with "Fixed".
+.Sh ENVIRONMENT
+.Bl -tag -width Ds
+.It Ev EDITOR
+if set will be used instead of the default, /usr/bin/vim.
+.El
+.Sh FILES
+.Bl -tag -width Ds
+.It Pa $HOME/.diary
+contains all configuration, temporary and data files for the 
+.Ar diary
+program.
+.It Pa $HOME/.diary/diaryrc
+this file gets included at runtime and can be used to override standard configuration
+variables.
+.It Pa $HOME/.diary/pages
+the directory that holds the actual diary page data.
+.Sh SEE ALSO
+date(1), grep(1), less(1), merge(1)
